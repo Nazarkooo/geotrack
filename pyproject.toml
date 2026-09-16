@@ -1,0 +1,120 @@
+[project]
+name = "geotrack"
+version = "1.0.0"
+description = "Real-time geo-tracking and geofence alerting service"
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = [
+    "alembic>=1.20.0",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.141.1",
+    "geoalchemy2>=0.20.0",
+    "httptools>=0.8.0",
+    "httpx>=0.28.1",
+    "orjson>=3.12.0",
+    "prometheus-client>=0.26.0",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "pyjwt>=2.14.0",
+    "redis[hiredis]>=8.1.0",
+    "sqlalchemy[asyncio]>=2.0.54",
+    "structlog>=26.1.0",
+    "uvicorn>=0.53.0",
+    "uvloop>=0.22.1; sys_platform != 'win32'",
+    "websockets>=17.1",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.8",
+    "testcontainers>=4.15.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/geotrack"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+extend-exclude = ["migrations/versions"]
+
+# generator.py is handed over as a standalone script and has to start on whatever
+# interpreter the person running it has. Without this the formatter rewrites it into
+# syntax only 3.14 can parse, and it dies at import before printing its usage.
+[tool.ruff.per-file-target-version]
+"generator.py" = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "SIM", "ASYNC", "RUF", "S", "PT", "TID", "N", "C4", "PERF",
+    "RET", "PIE", "T20", "DTZ", "LOG", "G",
+]
+ignore = [
+    "S104",  # binding to 0.0.0.0 is intended inside containers
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S311", "PERF401"]
+"generator.py" = ["S311", "T201"]
+"scripts/*.py" = ["S101", "T201"]
+"migrations/**" = ["S608"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["geotrack", "generator"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["src", "tests", "generator.py"]
+mypy_path = ["src"]
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+[[tool.mypy.overrides]]
+module = ["testcontainers.*", "geoalchemy2.*", "asyncpg.*", "docker.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = [".", "src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+markers = [
+    "integration: needs PostgreSQL/PostGIS and Redis (testcontainers or TEST_* URLs)",
+]
+filterwarnings = [
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.coverage.run]
+source = ["src/geotrack"]
+branch = true
+concurrency = ["greenlet", "thread"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]
