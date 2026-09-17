@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="GeoTrack">
+  <rect width="32" height="32" rx="7" fill="#0b0f14" />
+  <circle cx="16" cy="16" r="9.5" fill="none" stroke="#4da3ff" stroke-width="1.6" opacity="0.55" />
+  <circle cx="16" cy="16" r="4" fill="none" stroke="#4da3ff" stroke-width="1.6" />
+  <circle cx="16" cy="16" r="1.9" fill="#ffd05c" />
+</svg>

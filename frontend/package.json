@@ -1,0 +1,9 @@
+{
+  "name": "geotrack-dashboard",
+  "private": true,
+  "type": "module",
+  "description": "Static dashboard, shipped as written. The manifest only declares ES module semantics for node --test; the browser needs no build step.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>GeoTrack</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.css"
+      integrity="sha384-Q5Blg3vUVAlUKqIPJYz7wGnz40Vwrx4pVuFVicI73+8c/26Zr5hhckfuIiIUflLE"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@geoman-io/maplibre-geoman-free@0.9.2/dist/maplibre-geoman.css"
+      integrity="sha256-CsPMsgl0xS9mQCXjZBxCvtu0zz0TpSWQEitpp8CrtVo="
+      crossorigin="anonymous"
+    />
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+
+    <!--
+      Pinned to exact versions with subresource integrity: the dashboard must not change
+      because a CDN republished a tag. The drawing plugin imports "maplibre-gl" by bare
+      specifier, which is why the map itself is resolved through this map rather than by
+      URL. Hashes re-verified against the published files before release.
+
+      An import map can only be inline, so the policy serving this page has to allow this
+      one block by hash. Editing anything between the tags below changes that hash and the
+      page stops loading; recompute it from the element's exact text content. The policy
+      the dashboard was verified against, in a browser, end to end:
+
+        default-src 'self';
+        script-src 'self' https://cdn.jsdelivr.net
+                   'sha256-9s4IzXwByyH/7H46zg0tAs1zhty95JSAFu446P2KI6c=';
+        style-src  'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+        img-src    'self' data: blob: https://tiles.openfreemap.org;
+        connect-src 'self' data: https://tiles.openfreemap.org;
+        worker-src blob: https://cdn.jsdelivr.net;
+        font-src   'self' https://tiles.openfreemap.org;
+        frame-ancestors 'none'; base-uri 'none'; object-src 'none'
+
+      Two of those are easy to get wrong, and both fail as a map that never finishes
+      loading rather than as an obvious error: the map's worker is started from a blob but
+      pulls its shared chunk from the CDN, so worker-src needs that origin and not just
+      blob:; and the basemap resolves some of its own resources through data: URLs, which
+      connect-src has to allow as well as img-src.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "maplibre-gl": "https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.mjs",
+          "@geoman-io/maplibre-geoman-free": "https://cdn.jsdelivr.net/npm/@geoman-io/maplibre-geoman-free@0.9.2/dist/maplibre-geoman.es.js"
+        },
+        "integrity": {
+          "https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.mjs": "sha256-RU4LuxbHIc+/lSqS/z5DYhMDRu1Zpb/1auXW++u2Ufc=",
+          "https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl-shared.mjs": "sha256-CZag/y7LKAevw/BTmSU5/3/kXBZ4oCMEsrMxIBNvgfM=",
+          "https://cdn.jsdelivr.net/npm/@geoman-io/maplibre-geoman-free@0.9.2/dist/maplibre-geoman.es.js": "sha256-7jaGQapsGlBQTxbEVROMtgrIW1CxKYDIX1SkECDvh7U="
+        }
+      }
+    </script>
+
+    <!-- deck.gl ships a UMD bundle; `defer` keeps it ahead of the module entry point. -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/deck.gl@9.4.0/dist.min.js"
+      integrity="sha384-NrpHmp6N6IhXZ+gSV+uRLo+Hqprkw4BfdGzmxgWXhjakjkAabyfQxokSmn/aK0VB"
+      crossorigin="anonymous"
+      defer
+    ></script>
+    <script type="module" src="/js/main.js"></script>
+  </head>
+
+  <body>
+    <noscript class="noscript">GeoTrack is a live map; it needs JavaScript enabled.</noscript>
+
+    <div class="login" id="login" hidden>
+      <form class="login__card" id="login-form" novalidate>
+        <h1 class="login__title"><span class="brand__mark" aria-hidden="true"></span> GeoTrack</h1>
+        <p class="login__lead">Live fleet positions and geofence alerts.</p>
+        <label class="field">
+          <span class="field__label">Username</span>
+          <input
+            class="field__input"
+            id="login-username"
+            name="username"
+            type="text"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            placeholder="nazar"
+            required
+            minlength="3"
+            maxlength="32"
+            pattern="[A-Za-z0-9_.\-]{3,32}"
+          />
+        </label>
+        <p class="login__error" id="login-error" role="alert" hidden></p>
+        <button class="button button--primary button--block" id="login-submit" type="submit">
+          Sign in
+        </button>
+        <p class="login__note">
+          Sessions are identified by username only; open the same name on a second device to
+          watch alerts arrive on both.
+        </p>
+      </form>
+    </div>
+
+    <div class="app" id="app" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true"></span>
+          <span class="brand__name">GeoTrack</span>
+        </div>
+
+        <button class="pill" id="connection" type="button" aria-live="polite">
+          <span class="pill__dot" id="connection-dot"></span>
+          <span id="connection-text">Connecting…</span>
+        </button>
+
+        <dl class="stats" id="stats">
+          <div class="stats__item"><dt>Devices</dt><dd id="stat-devices">—</dd></div>
+          <div class="stats__item"><dt>Updates/s</dt><dd id="stat-rate">—</dd></div>
+          <div class="stats__item"><dt>Backlog</dt><dd id="stat-backlog">—</dd></div>
+          <div class="stats__item"><dt>Round trip</dt><dd id="stat-rtt">—</dd></div>
+        </dl>
+
+        <div class="topbar__end">
+          <div class="sessions">
+            <button
+              class="button button--ghost"
+              id="sessions-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="sessions-popover"
+            >
+              <span class="sessions__count" id="sessions-count">1</span>
+              <span class="sessions__label">sessions</span>
+            </button>
+            <div class="popover" id="sessions-popover" hidden>
+              <h2 class="popover__title">Active sessions</h2>
+              <ul class="sessions__list" id="sessions-list"></ul>
+            </div>
+          </div>
+          <span class="topbar__user" id="current-user"></span>
+          <button class="button button--ghost" id="logout" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <div class="map" id="map"></div>
+
+        <div class="maptools" role="toolbar" aria-label="Zone tools">
+          <button class="tool" id="tool-draw" type="button" aria-pressed="false" title="Click the centre, then click again to set the radius; stays on for the next zone">
+            <span class="tool__icon" aria-hidden="true">◎</span> Draw zone
+          </button>
+          <button class="tool" id="tool-move" type="button" aria-pressed="false" title="Drag a zone to a new place">
+            <span class="tool__icon" aria-hidden="true">✥</span> Move
+          </button>
+          <button class="tool" id="tool-remove" type="button" aria-pressed="false" title="Click a zone to delete it">
+            <span class="tool__icon" aria-hidden="true">⌫</span> Remove
+          </button>
+        </div>
+
+        <section class="devicecard" id="device-card" hidden aria-label="Selected device">
+          <header class="devicecard__head">
+            <h2 class="devicecard__id" id="device-id">—</h2>
+            <button class="iconbutton" id="device-close" type="button" aria-label="Close device details">
+              ✕
+            </button>
+          </header>
+          <dl class="devicecard__grid">
+            <div><dt>Latitude</dt><dd id="device-lat">—</dd></div>
+            <div><dt>Longitude</dt><dd id="device-lon">—</dd></div>
+            <div><dt>Last report</dt><dd id="device-age">—</dd></div>
+            <div><dt>Inside zones</dt><dd id="device-zones">—</dd></div>
+          </dl>
+          <div class="devicecard__actions">
+            <button class="button button--small" id="device-track" type="button">Show recent track</button>
+            <button class="button button--small button--ghost" id="device-follow" type="button">
+              Centre map
+            </button>
+          </div>
+        </section>
+
+        <aside class="panel" id="panel" aria-label="Zones and alerts">
+          <button class="panel__handle" id="panel-handle" type="button" aria-expanded="true">
+            <span class="panel__grip" aria-hidden="true"></span>
+            <span class="visually-hidden">Toggle panel</span>
+          </button>
+
+          <div class="tabs" role="tablist" aria-label="Panel sections">
+            <button
+              class="tab is-active"
+              id="tab-zones"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="pane-zones"
+            >
+              Zones <span class="tab__count" id="zones-count">0</span>
+            </button>
+            <button
+              class="tab"
+              id="tab-alerts"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="pane-alerts"
+            >
+              Alerts <span class="tab__count" id="alerts-count">0</span>
+            </button>
+          </div>
+
+          <div class="pane" id="pane-zones" role="tabpanel" aria-labelledby="tab-zones">
+            <p class="pane__hint" id="zones-empty">
+              No zones yet. Pick <strong>Draw zone</strong>, click the centre on the map, then
+              click again to set the radius. Drawing stays on until you switch it off.
+            </p>
+            <ul class="zonelist" id="zone-list"></ul>
+          </div>
+
+          <div class="pane" id="pane-alerts" role="tabpanel" aria-labelledby="tab-alerts" hidden>
+            <div class="filters">
+              <label class="field field--inline">
+                <span class="field__label">Zone</span>
+                <select class="field__select" id="alert-zone-filter">
+                  <option value="">All zones</option>
+                </select>
+              </label>
+              <label class="field field--inline">
+                <span class="field__label">Kind</span>
+                <select class="field__select" id="alert-kind-filter">
+                  <option value="">All</option>
+                  <option value="enter">Enter</option>
+                  <option value="exit">Exit</option>
+                  <option value="dwell">Dwell</option>
+                </select>
+              </label>
+            </div>
+            <p class="pane__hint" id="alerts-empty">No alerts yet.</p>
+            <ul class="alertfeed" id="alert-feed"></ul>
+          </div>
+        </aside>
+      </main>
+
+      <div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+      <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
+    </div>
+
+    <template id="zone-row-template">
+      <li class="zone">
+        <div class="zone__head">
+          <span class="zone__swatch" data-role="swatch"></span>
+          <input
+            class="zone__name"
+            data-role="name"
+            type="text"
+            maxlength="80"
+            aria-label="Zone name"
+          />
+          <button class="iconbutton" data-role="expand" type="button" aria-expanded="false">
+            <span class="visually-hidden">Zone settings</span>
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
+        <div class="zone__meta">
+          <button class="linkbutton" data-role="fly" type="button">Fly to</button>
+          <span data-role="radius"></span>
+          <span class="zone__inside" data-role="inside"></span>
+        </div>
+        <div class="zone__settings" data-role="settings" hidden>
+          <label class="field field--inline">
+            <span class="field__label">Colour</span>
+            <input class="field__color" data-role="color" type="color" />
+          </label>
+          <label class="field field--inline">
+            <span class="field__label">Radius (m)</span>
+            <input class="field__input" data-role="radius-input" type="number" min="10" max="50000" step="1" />
+          </label>
+          <label class="switch">
+            <input data-role="enter" type="checkbox" />
+            <span>Alert on enter</span>
+          </label>
+          <label class="switch">
+            <input data-role="exit" type="checkbox" />
+            <span>Alert on exit</span>
+          </label>
+          <label class="switch">
+            <input data-role="dwell-on" type="checkbox" />
+            <span>Repeat while inside</span>
+          </label>
+          <label class="field field--inline" data-role="dwell-field">
+            <span class="field__label">Every (s)</span>
+            <input class="field__input" data-role="dwell" type="number" min="10" max="86400" step="10" />
+          </label>
+          <button class="button button--small button--danger" data-role="delete" type="button">
+            Delete zone
+          </button>
+        </div>
+      </li>
+    </template>
+
+    <template id="alert-row-template">
+      <li class="alert">
+        <button class="alert__button" type="button">
+          <span class="alert__kind" data-role="kind"></span>
+          <span class="alert__body">
+            <span class="alert__device" data-role="device"></span>
+            <span class="alert__zone" data-role="zone"></span>
+          </span>
+          <time class="alert__time" data-role="time"></time>
+        </button>
+      </li>
+    </template>
+  </body>
+</html>
