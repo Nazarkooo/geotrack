@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: geotrack
+    type: file
+    # The file on disk is the source of truth; edits made in the browser would be
+    # silently overwritten, so the UI is not allowed to save over it.
+    allowUiUpdates: false
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

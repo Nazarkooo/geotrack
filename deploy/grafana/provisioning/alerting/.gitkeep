@@ -1,0 +1,1 @@
+# Grafana reads every provisioning subdirectory; an empty one keeps its startup log clean.

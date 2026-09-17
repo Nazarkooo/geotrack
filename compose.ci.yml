@@ -1,0 +1,11 @@
+# CI-only overlay: publishes the datastores on the loopback interface so the test
+# suite can reach them without testcontainers, while the main file keeps them
+# unreachable from outside the stack.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
